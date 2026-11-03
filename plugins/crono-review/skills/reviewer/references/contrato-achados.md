@@ -79,7 +79,7 @@ O relatório humano de cada skill continua existindo. O JSON é uma saída **adi
 | `symbol` | classe, método, componente ou seletor que contém o problema (ex.: `SequenceEmailNotificationService.sendSequenceRevisionNotification`); `null` se não se aplica |
 | `rule` | regra citada, quando houver: `ARQ-B3`, `CLAUDE.md#7`, `smell:Mysterious Name`, `SOLID-D`; `null` para bug sem regra escrita |
 | `scenario` | entrada/estado → resultado errado (reviewer); para Standards/Spec, a frase do problema |
-| `evidence` | trecho literal do diff, da regra ou da spec que sustenta o achado |
+| `evidence` | trecho literal do diff, da regra ou da spec que sustenta o achado. Pode ter várias linhas; cada linha precisa existir no diff (ignorando o prefixo `+`/`-`/espaço da linha do diff) |
 | `suggested_action` | correção sugerida; quem for corrigir não é obrigado a segui-la |
 | `actionable` | `true` se existe correção objetiva no código; `false` para perguntas, escopo extra e decisões de produto |
 | `confidence` | `high` (verificado no código/backend/teste), `medium` (raciocínio sólido, sem execução), `low` (plausível, a confirmar) |

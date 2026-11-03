@@ -80,6 +80,7 @@ Plugin não instalado: se a ferramenta Skill não encontrar a skill (por exemplo
 Independência:
 - Não ler o `reviewer.json` nem o retorno do subagente do `reviewer` antes de terminar a `standards-spec-review` por completo (incluindo o JSON dela). A verificação de citações da `standards-spec-review` acontece neste contexto e não pode ser influenciada pelos achados do `reviewer`.
 - Não passar ao subagente do `reviewer` nada da análise de Standards/Spec.
+- O ambiente pode entregar o retorno do subagente do `reviewer` antes de a `standards-spec-review` terminar. Nesse caso, não usar o conteúdo até gravar o `standards.json`, e registrar no relatório se isso aconteceu depois da verificação de citações (sem efeito) ou antes dela.
 
 Se uma das duas falhar (erro, JSON ausente ou inválido): não publicar nada. Relatar o que rodou e o que falhou, e parar.
 
