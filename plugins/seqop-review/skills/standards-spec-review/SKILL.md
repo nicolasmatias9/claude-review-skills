@@ -18,13 +18,15 @@ Esta skill **não procura bugs**. Bugs, segurança e testes quebrados são o tra
 
 ## Entrada
 
-`/seqop-review:standards-spec-review <ponto-fixo | PR> [spec=<caminho>] [repo=<pasta>] [--no-post]`
+`/seqop-review:standards-spec-review <ponto-fixo | PR> [spec=<caminho>] [repo=<pasta>] [--no-post] [--sha <sha>] [--json <arquivo>]`
 
 - **Ponto fixo** (obrigatório): commit, branch, tag, `origin/develop`, `HEAD~5`…
 - **PR**: número ou URL `https://github.com/edgebr/<repo>/pull/N`. Vira ponto fixo = `origin/<base do PR>` e HEAD = ref temporária do PR.
 - `spec=`: caminho de um arquivo de spec, para pular a busca.
 - `repo=`: `petr-op-seqop-backend`, `petr-op-seqop-frontend` ou `petr-op-core`. Se o diretório atual já for um deles, não precisa.
 - `--no-post`: com alvo PR, não publicar no PR (o relatório fica só no chat). Sem a flag, revisão de PR é sempre publicada (Passo 7).
+- `--sha <sha>`: com alvo PR, revisar exatamente esse commit (SHA completo) em vez do head atual. Usado pelo `review-pr`.
+- `--json <arquivo>`: além do relatório, gravar os achados nesse arquivo no formato de [../reviewer/references/contrato-achados.md](../reviewer/references/contrato-achados.md) (Passo 6).
 
 Se o ponto fixo não for informado, **perguntar**. Não adivinhar `develop`.
 
@@ -37,13 +39,15 @@ Se o ponto fixo não for informado, **perguntar**. Não adivinhar `develop`.
    git -C <pasta> fetch origin pull/N/head:review/pr-N <baseRefName>
    ```
    Nesse caso o HEAD é `review/pr-N` e o ponto fixo é `origin/<baseRefName>`.
+
+   **Com `--sha <sha>`:** não criar nem apagar a ref `review/pr-N` (outra revisão pode estar usando o mesmo PR em paralelo). O HEAD é o próprio `<sha>`. Se o objeto não existir localmente (`git -C <pasta> cat-file -e <sha>^{commit}` falha), rodar `git -C <pasta> fetch origin pull/N/head <baseRefName>` sem criar ref e conferir de novo; se continuar faltando, abortar sem gerar relatório nem JSON. Sem `--sha`, anotar o SHA completo de `review/pr-N` (`git rev-parse`): ele é o `head_sha` do relatório e do JSON.
 3. Conferir que o ponto fixo resolve: `git -C <pasta> rev-parse --verify <ponto-fixo>`.
 4. Gerar o diff **three-dot**, que mede a partir do merge-base e ignora staged e working tree:
    ```bash
-   git -C <pasta> diff <ponto-fixo>...<head> > "$SCRATCH/ssr.diff"
-   git -C <pasta> log --format='%h %s%n%b' <ponto-fixo>..<head> > "$SCRATCH/ssr-commits.txt"
+   git -C <pasta> diff --output="$SCRATCH/ssr.diff" <ponto-fixo>...<head>
+   git -C <pasta> log --output="$SCRATCH/ssr-commits.txt" --format='%h %s%n%b' <ponto-fixo>..<head>
    ```
-5. Se o diff estiver vazio, **parar aqui** e dizer isso. Se `git status` mostrar mudanças não commitadas, avisar que elas ficam de fora da revisão.
+5. Usar sempre `--output=<arquivo>` do git, nunca `>`: neste ambiente o Bash passa `git` por um wrapper (`rtk`) que compacta a saída redirecionada, e os subagentes revisariam um resumo em vez do diff. Conferir que o `ssr.diff` tem uma linha `diff --git` por arquivo alterado. Se o diff estiver vazio, **parar aqui** e dizer isso. Se `git status` mostrar mudanças não commitadas, avisar que elas ficam de fora da revisão.
 
 ## Passo 2 — Reunir as fontes de Standards
 
@@ -104,6 +108,7 @@ Regras:
   - smell: nome do smell do baseline + hunk literal do diff.
   Achado sem citação deve ser descartado.
 - Violação de regra documentada = "violação". Smell = "heurística", nunca violação, sempre com sugestão de correção.
+- Regra 7 do `CLAUDE.md` do frontend (comentário no início dos métodos, "principalmente os complexos"): é **violação** só em método complexo, ou seja, corpo com mais de ~10 linhas, **ou** mais de um ponto de decisão além de uma guarda inicial (`if`/`else`, `switch`, ternário encadeado, laço, `try`/`catch`), **ou** cálculo/conversão não óbvio (índices, datas, posições), **ou** efeito colateral que o nome não revela. Em método simples (getter/setter, delegação de uma linha, handler que só repassa um valor, guarda + até 3 instruções lineares), falta de comentário é **heurística**. Ao reportar como violação, dizer qual dos critérios o método atende.
 - No máximo 10 achados, os mais relevantes primeiro.
 - Não invoque /seqop-review:standards-spec-review, /seqop-review:reviewer, /code-review nem nenhuma skill, e não crie outros agentes: faça a revisão diretamente.
 
@@ -171,7 +176,7 @@ Dois blocos separados, nesta ordem, cada um com o conteúdo verificado do seu ei
 
 ```markdown
 # Standards & Spec review — <repo> (<ponto-fixo>...<head>)
-<N> arquivos, +<a>/-<d>. Spec usada: <caminho/PR/ticket ou "nenhuma">.
+<N> arquivos, +<a>/-<d>. Commit revisado: <head_sha completo>. Spec usada: <caminho/PR/ticket ou "nenhuma">.
 
 ## Standards
 <relatório verificado do eixo Standards>
@@ -187,6 +192,16 @@ Dois blocos separados, nesta ordem, cada um com o conteúdo verificado do seu ei
 
 O resumo **não** elege um eixo vencedor nem compara os eixos entre si. O status de merge do Passo 7 é outra coisa: ele não pondera os eixos, só diz se **algum** deles tem item obrigatório.
 
+### Saída estruturada (`--json <arquivo>`)
+
+Gravar, com a ferramenta Write, um arquivo no formato de [../reviewer/references/contrato-achados.md](../reviewer/references/contrato-achados.md) com `"reviewer": "standards-spec-review"`, o `head_sha` revisado e **só os achados que sobreviveram ao Passo 5**, convertidos pelo de-para do contrato:
+- eixo Standards → `source: "standards"`, IDs `STD-001`…; Violação → `important`, Heurística → `suggestion`; `rule` com o código citado (`ARQ-B3`, `CLAUDE.md#7`, `smell:<Nome>`, `SOLID-<letra>`);
+- eixo Spec → `source: "spec"`, IDs `SPC-001`…; Ausente/Parcial/Divergente → `important` com `category` `spec_missing`/`spec_partial`/`spec_divergence`; escopo extra → `suggestion`, `scope_creep`, `actionable: false`;
+- `requirements` com **todos** os requisitos da tabela do eixo Spec, inclusive os atendidos (`met`), e `requirement_id` ligando cada achado de Spec ao requisito;
+- `spec` com a origem da spec, ou `null` se o eixo foi pulado; `verification.discarded_in_verification` com o número do Passo 5.
+
+Validar o JSON (comando no contrato) antes de terminar. Com `--json`, responder no fim com o caminho do arquivo e uma linha de resumo por eixo.
+
 ## Passo 7 — Publicar o resultado no PR
 
 **Obrigatório** quando o alvo é um PR e não houver `--no-post`. Seguir [../reviewer/references/publicacao-pr.md](../reviewer/references/publicacao-pr.md): status (CORRIGIR / RESPONDER / PRONTO PARA MERGE), formato do review, comentários inline e comando de publicação. Publicar sem pedir confirmação: é regra do time que toda revisão de PR seja publicada no PR.
@@ -200,4 +215,5 @@ Para esta skill:
 
 - Rodar uma vez por pedido. Não repetir a revisão até "zerar" os achados: rodadas novas sempre trazem algo novo, e só achados citados merecem ação.
 - Nunca editar código, commitar, aprovar ou fazer merge. A única escrita permitida é o review do Passo 7.
-- Ao final, apagar a ref `review/pr-N`, se tiver sido criada.
+- Ao final, apagar a ref `review/pr-N`, se tiver sido criada por esta execução (com `--sha`, nenhuma ref é criada).
+- Chamada pelo `review-pr`: não invocar `review-pr` nem `reviewer`; os dois eixos continuam nos subagentes do Passo 4.

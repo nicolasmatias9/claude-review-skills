@@ -9,11 +9,13 @@ Revisão de PR com foco em **achados verificados**, não em lista de opiniões. 
 
 ## Entrada
 
-`/crono-review:reviewer <alvo> [--no-post] [--run-tests]`
+`/crono-review:reviewer <alvo> [--no-post] [--run-tests] [--sha <sha>] [--json <arquivo>]`
 
 - `<alvo>`: número do PR (`123`), URL (`https://github.com/edgebr/<repo>/pull/123`) ou vazio (= branch atual do repo em que se está trabalhando, comparada com a base).
 - `--no-post`: não publicar no PR; o relatório fica só no chat. Sem a flag, toda revisão de PR é publicada no PR (Passo 7).
 - `--run-tests`: além da leitura, rodar testes e build localmente.
+- `--sha <sha>`: revisar exatamente esse commit (SHA completo). Usado pelo `review-pr` para garantir que as duas revisões olham o mesmo código. Ver Passo 1.
+- `--json <arquivo>`: além do relatório, gravar os achados nesse arquivo no formato de [references/contrato-achados.md](references/contrato-achados.md) (Passo 6).
 
 Repositórios (em `edgebr/` no GitHub, clones locais na raiz do workspace `crono`):
 
@@ -33,9 +35,10 @@ Nunca fazer `checkout` na branch do PR no clone do usuário: ele pode ter trabal
 ```bash
 R=edgebr/<repo>; N=<numero>
 gh pr view $N -R $R --json number,title,body,author,baseRefName,headRefName,headRefOid,additions,deletions,changedFiles,files,labels,reviews,comments
-gh pr diff $N -R $R > "$SCRATCH/pr-$N.diff"
+gh pr diff $N -R $R --name-only                 # só a lista de arquivos; o diff vem do git abaixo
 gh api repos/$R/pulls/$N/comments --paginate   # comentários inline anteriores
 git -C <pasta> fetch origin pull/$N/head:review/pr-$N <baseRefName>
+git -C <pasta> diff --output="$SCRATCH/pr-$N.diff" origin/<baseRefName>...review/pr-$N   # ou ...<sha> com --sha
 ```
 
 **Se o `gh` não estiver autenticado** (`gh auth status` falha), não pedir token: seguir só com git, que usa as credenciais do Git Credential Manager. Faça o `fetch` acima, gere o diff com `git -C <pasta> diff origin/<base>...review/pr-$N` e use a mensagem dos commits como descrição. No relatório, avisar que descrição do PR e comentários anteriores não foram lidos, e que a publicação no PR fica indisponível até o usuário rodar `gh auth login`.
@@ -43,7 +46,17 @@ git -C <pasta> fetch origin pull/$N/head:review/pr-$N <baseRefName>
 Para ler um arquivo inteiro na versão do PR: `git -C <pasta> show review/pr-$N:<caminho>`.
 Para alvo = branch atual: `git -C <pasta> diff origin/<base>...HEAD`.
 
+**Com `--sha <sha>`** (SHA fixado, normalmente pelo `review-pr`):
+- Não criar nem apagar a ref `review/pr-$N`: outra revisão pode estar usando o mesmo PR em paralelo. Usar o próprio SHA como "versão do PR" em todos os comandos (`git show <sha>:<caminho>`, `git diff origin/<base>...<sha>`, worktree do Passo 4).
+- Se o objeto não existir localmente (`git -C <pasta> cat-file -e <sha>^{commit}` falha), rodar `git -C <pasta> fetch origin pull/$N/head <baseRefName>` (sem criar ref) e conferir de novo.
+- Gerar o diff com `git -C <pasta> diff --output=<arquivo> origin/<baseRefName>...<sha>` (o `gh pr diff` sempre mostra o head atual).
+- Se o `headRefOid` atual do PR for diferente de `<sha>`, registrar isso no relatório ("PR recebeu commits depois do SHA revisado"), mas revisar o `<sha>` pedido.
+
+Sem `--sha`, anotar o `headRefOid` lido no início: ele é o `head_sha` do relatório e do JSON.
+
 Guardar o diff no scratchpad, não no repositório.
+
+**Gravar diff e log sempre com `--output=<arquivo>` do próprio git, nunca com `>`.** Neste ambiente o Bash passa `git` e `gh` por um wrapper (`rtk`) que compacta a saída mesmo redirecionada: o arquivo sai como resumo, sem as linhas `diff --git`, e a revisão fica incompleta sem aviso. Conferir antes de revisar: o arquivo precisa ter uma linha `diff --git` por arquivo alterado.
 
 ## Passo 2 — Entender a intenção
 
@@ -98,7 +111,7 @@ Rodar em uma **worktree separada** para não tocar no clone do usuário:
 
 ```powershell
 $wt = "C:\Users\$env:USERNAME\wt-crono-pr$N"   # caminho curto: o do scratchpad estoura o limite de 260 caracteres do Windows
-git -C <pasta> worktree add $wt review/pr-$N
+git -C <pasta> worktree add --detach $wt <sha ou review/pr-$N>
 # Frontend: reaproveitar as dependências do clone em vez de rodar npm install
 New-Item -ItemType Junction -Path "$wt\node_modules" -Target "<pasta>\node_modules"
 ```
@@ -113,7 +126,7 @@ Ao final, **primeiro** remover a junction (`cmd /c rmdir "$wt\node_modules"`, qu
 Antes de reportar, cada achado precisa passar por:
 - **Está no código alterado** (ou é diretamente causado por ele)? Problemas antigos fora do diff só entram como nota, nunca como bloqueante.
 - **Consigo descrever entrada/estado → resultado errado?** Se não, é especulação: descartar ou rebaixar a "pergunta".
-- **Já foi apontado** em comentário anterior do PR? Se sim, só dizer se foi resolvido ou não.
+- **Já foi apontado** em comentário anterior do PR? Se foi resolvido, registrar na verificação. Se **continua pendente, manter como achado** (mesma severidade, no relatório e no JSON) com `previous_comment` apontando para o comentário anterior: pendente não é resolvido, e omitir faria o status de merge esconder o problema.
 - Não reportar estilo que o `.editorconfig` já pega nem preferência pessoal sem regra do time.
 
 ## Passo 6 — Relatório
@@ -148,6 +161,12 @@ Severidades:
 
 Se não houver achados, dizer isso claramente — não inventar problema para preencher seção.
 
+O relatório informa o commit revisado: `**Commit revisado:** <head_sha>` logo abaixo da intenção.
+
+### Saída estruturada (`--json <arquivo>`)
+
+Gravar, com a ferramenta Write, um arquivo no formato de [references/contrato-achados.md](references/contrato-achados.md) com `"reviewer": "reviewer"`, o `head_sha` revisado e **os mesmos achados do relatório**, convertidos pelo de-para do contrato (Bloqueante → `blocker`, Importante → `important`, Sugestão → `suggestion`, Pergunta → `question`). IDs `REV-001`, `REV-002`… na ordem do relatório. Validar o JSON (comando no contrato) antes de terminar. Com `--json`, responder no fim com o caminho do arquivo e uma linha de resumo (status e contagem por severidade).
+
 ## Passo 7 — Publicar o resultado no PR
 
 **Obrigatório** quando o alvo é um PR e não houver `--no-post`. Seguir [references/publicacao-pr.md](references/publicacao-pr.md): status (CORRIGIR / RESPONDER / PRONTO PARA MERGE), formato do review, comentários inline e comando de publicação. Publicar sem pedir confirmação: é regra do time que toda revisão de PR seja publicada no PR.
@@ -158,4 +177,5 @@ Para esta skill, **Bloqueantes e Importantes** exigem correção; **Sugestões**
 
 - Nunca commitar, fazer push, aprovar ou fazer merge.
 - Não alterar arquivos do PR; a skill só revisa. Se o usuário quiser as correções aplicadas, isso é um passo separado.
-- Limpar refs/worktrees temporárias ao final.
+- Limpar ao final as refs e worktrees temporárias **que esta execução criou** (com `--sha`, nenhuma ref é criada).
+- Rodando dentro de um subagente (ex.: chamado pelo `review-pr`): não invocar `review-pr` nem `standards-spec-review`. Se não for possível criar subagentes para diffs grandes, revisar diretamente, área por área.
