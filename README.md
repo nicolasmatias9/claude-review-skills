@@ -4,15 +4,18 @@ Marketplace de plugins do Claude Code com as skills de revisão de PR dos projet
 
 | Plugin | Repositórios cobertos | Comandos |
 |---|---|---|
-| `seqop-review` | `petr-op-seqop-backend`, `petr-op-seqop-frontend`, `petr-op-core` | `/seqop-review:reviewer`, `/seqop-review:standards-spec-review` |
-| `crono-review` | `petr-op-crono-backend`, `petr-op-crono-frontend` | `/crono-review:reviewer`, `/crono-review:standards-spec-review` |
+| `seqop-review` | `petr-op-seqop-backend`, `petr-op-seqop-frontend`, `petr-op-core` | `/seqop-review:review-pr`, `/seqop-review:reviewer`, `/seqop-review:standards-spec-review` |
+| `crono-review` | `petr-op-crono-backend`, `petr-op-crono-frontend` | `/crono-review:review-pr`, `/crono-review:reviewer`, `/crono-review:standards-spec-review` |
 
 ## O que cada skill faz
 
+- **`review-pr`** (recomendado) — orquestra a revisão completa: fixa o commit do PR, roda as duas skills abaixo **de forma independente sobre o mesmo SHA**, valida, consolida e deduplica os achados, lê o CI e publica **um único review** no PR, com os dados estruturados (JSON) num bloco recolhido. Não revisa duas vezes o mesmo SHA (use `--force` para isso). Só revisa: não altera código.
 - **`reviewer`** — caça bugs no PR: correção, segurança, regras do time, regras de camada e testes. Opcionalmente roda testes e build (`--run-tests`).
 - **`standards-spec-review`** — revisa em dois eixos independentes, cada um num subagente: **Standards** (convenções documentadas, regras de camada, code smells e SOLID) e **Spec** (o PR entrega o que o ticket/spec pediu?). Não procura bugs.
 
-Quando o alvo é um PR, as duas **publicam o resultado no PR** (review do tipo Comment) com um destes status:
+As duas especialistas aceitam `--sha <sha>` (revisar um commit exato) e `--json <arquivo>` (gravar os achados no formato de `skills/reviewer/references/contrato-achados.md`). O `review-pr` usa as duas flags; no uso direto, são opcionais.
+
+Quando o alvo é um PR, o resultado é **publicado no PR** (review do tipo Comment) com um destes status:
 
 | Status | Quando |
 |---|---|
@@ -21,6 +24,21 @@ Quando o alvo é um PR, as duas **publicam o resultado no PR** (review do tipo C
 | **PRONTO PARA MERGE** | Nada a corrigir nem a responder (sugestões são opcionais) |
 
 Use `--no-post` para receber o relatório só no chat. Nenhuma skill aprova, faz merge, commita ou altera o código do PR.
+
+## Loop engineering
+
+Este repositório é a base do loop de engenharia (planejar → implementar → revisar → corrigir → revalidar). Etapas:
+
+| Etapa | Situação |
+|---|---|
+| 1. Contrato JSON dos achados (`contrato-achados.md`) e saída estruturada nas duas especialistas | feito (1.1.0) |
+| 2. `review-pr`: orquestração, SHA fixo, consolidação e publicação única | feito (1.1.0), validar com PRs reais |
+| 3. `resolve-pr-feedback`: correção dos achados com limite de ciclos e revisão independente | a fazer |
+| 4. CI como autoridade independente (GitHub Actions + proteção de branch) | a fazer |
+| 5. Disparo por eventos do GitHub | a fazer |
+| 6. Observabilidade e aprendizado controlado das regras | a fazer |
+
+O JSON consolidado publicado pelo `review-pr` (marcador `<!-- review-pr:v1 head_sha=... -->`) é o que a etapa 3 vai consumir.
 
 ## Instalação
 
@@ -41,6 +59,8 @@ Instale só o plugin do projeto em que você trabalha. Para receber atualizaçõ
 Abra o Claude Code na **pasta do workspace** que contém os clones dos repositórios (ex.: a pasta com `petr-op-seqop-backend/` e `petr-op-seqop-frontend/` lado a lado). As skills localizam o repositório pelo nome da pasta.
 
 ```
+/seqop-review:review-pr https://github.com/edgebr/petr-op-seqop-frontend/pull/301
+/crono-review:review-pr 75 --no-post
 /seqop-review:reviewer https://github.com/edgebr/petr-op-seqop-frontend/pull/301
 /seqop-review:reviewer 171 --run-tests
 /crono-review:standards-spec-review https://github.com/edgebr/petr-op-crono-backend/pull/75
@@ -62,7 +82,8 @@ plugins/
 ├── seqop-review/
 │   ├── .claude-plugin/plugin.json
 │   └── skills/
-│       ├── reviewer/              (SKILL.md, references/publicacao-pr.md)
+│       ├── review-pr/             (SKILL.md — orquestrador)
+│       ├── reviewer/              (SKILL.md, references/publicacao-pr.md, references/contrato-achados.md)
 │       └── standards-spec-review/ (SKILL.md, references/arquitetura.md, references/smells.md)
 └── crono-review/                  (mesma estrutura, regras do Crono)
 ```

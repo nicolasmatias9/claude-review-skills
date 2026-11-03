@@ -6,6 +6,8 @@ Vale para `/seqop-review:reviewer` e `/seqop-review:standards-spec-review`. **To
 
 Se o alvo não for um PR (branch, commit, `HEAD~5`…), não há onde publicar: o relatório fica só no chat.
 
+Quando as duas skills rodam pelo `review-pr`, elas recebem `--no-post` e **só o `review-pr` publica**, num review consolidado com o formato descrito no SKILL dele. Os status, as regras de escrita e o modo de envio abaixo valem igualmente para ele.
+
 ## Status
 
 Todo review publicado começa com **exatamente um** destes status, decidido pelos achados que sobreviveram à verificação:
