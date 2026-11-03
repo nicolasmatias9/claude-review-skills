@@ -161,7 +161,7 @@ Responda em português, neste formato, sem preâmbulo:
 Os subagentes produzem hipóteses. Antes de apresentar, conferir **cada** achado:
 
 - o hunk citado existe no diff (`grep -F` no `ssr.diff`) e o `arquivo:linha` aponta para ele;
-- o trecho de regra ou de spec citado existe literalmente no arquivo de origem;
+- o trecho de regra ou de spec citado existe literalmente no arquivo de origem; a comparação ignora só a ênfase markdown (`**`, `__`), porque o subagente costuma citar o texto como aparece renderizado; qualquer outra diferença invalida a citação;
 - em "Ausente", dar uma olhada rápida no arquivo inteiro para confirmar que não estava implementado antes.
 
 Para conferir texto com acento (regras e specs em português), usar a ferramenta Grep ou `grep -F` no Bash. O `Get-Content` do Windows PowerShell 5.1 lê UTF-8 sem BOM como ANSI e dá falso "não encontrado".

@@ -1,6 +1,6 @@
 {
     "name": "crono-review",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Revisão de PR do Crono (petr-op-crono-backend, petr-op-crono-frontend): caça de bugs e revisão de Standards/Spec, com o resultado publicado no PR.",
     "author": {
         "name": "Nicolas Matias",
