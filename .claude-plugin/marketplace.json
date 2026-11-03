@@ -1,0 +1,25 @@
+{
+    "name": "claude-review-skills",
+    "owner": {
+        "name": "Nicolas Matias",
+        "email": "nicolas.matias@edge.ufal.br"
+    },
+    "metadata": {
+        "description": "Skills de revisão de PR para os projetos SEQOP e Crono.",
+        "version": "1.0.0"
+    },
+    "plugins": [
+        {
+            "name": "seqop-review",
+            "source": "./plugins/seqop-review",
+            "description": "Revisão de PR do SEQOP (petr-op-seqop-backend, petr-op-seqop-frontend, petr-op-core): caça de bugs e revisão de Standards/Spec, com o resultado publicado no PR.",
+            "version": "1.0.0"
+        },
+        {
+            "name": "crono-review",
+            "source": "./plugins/crono-review",
+            "description": "Revisão de PR do Crono (petr-op-crono-backend, petr-op-crono-frontend): caça de bugs e revisão de Standards/Spec, com o resultado publicado no PR.",
+            "version": "1.0.0"
+        }
+    ]
+}
