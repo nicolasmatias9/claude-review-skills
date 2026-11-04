@@ -4,12 +4,13 @@ Marketplace de plugins do Claude Code com as skills de revisão de PR dos projet
 
 | Plugin | Repositórios cobertos | Comandos |
 |---|---|---|
-| `seqop-review` | `petr-op-seqop-backend`, `petr-op-seqop-frontend`, `petr-op-core` | `/seqop-review:review-pr`, `/seqop-review:reviewer`, `/seqop-review:standards-spec-review` |
-| `crono-review` | `petr-op-crono-backend`, `petr-op-crono-frontend` | `/crono-review:review-pr`, `/crono-review:reviewer`, `/crono-review:standards-spec-review` |
+| `seqop-review` | `petr-op-seqop-backend`, `petr-op-seqop-frontend`, `petr-op-core` | `/seqop-review:review-pr`, `/seqop-review:resolve-pr-feedback`, `/seqop-review:reviewer`, `/seqop-review:standards-spec-review` |
+| `crono-review` | `petr-op-crono-backend`, `petr-op-crono-frontend` | `/crono-review:review-pr`, `/crono-review:resolve-pr-feedback`, `/crono-review:reviewer`, `/crono-review:standards-spec-review` |
 
 ## O que cada skill faz
 
 - **`review-pr`** (recomendado) — orquestra a revisão completa: fixa o commit do PR, roda as duas skills abaixo **de forma independente sobre o mesmo SHA**, valida, consolida e deduplica os achados, lê o CI e publica **um único review** no PR, com os dados estruturados (JSON) num bloco recolhido. Não revisa duas vezes o mesmo SHA (use `--force` para isso). Só revisa: não altera código.
+- **`resolve-pr-feedback`** — corrige os itens **obrigatórios** do review consolidado: confere que o review é do head atual do PR, tria (ainda existe? precisa de decisão humana?), apresenta o plano e pede aprovação, corrige numa worktree, roda os testes, mostra o diff e só faz commit/push com aprovação, dispara um novo `review-pr` em contexto separado e publica a reconciliação (`resolved`, `open`, `invalidated`). No máximo 3 ciclos por PR. Push só em PR do próprio usuário; em PR de outro autor, gera só o plano (`--plan-only`). Nunca faz merge, aprova ou `push --force`.
 - **`reviewer`** — caça bugs no PR: correção, segurança, regras do time, regras de camada e testes. Opcionalmente roda testes e build (`--run-tests`).
 - **`standards-spec-review`** — revisa em dois eixos independentes, cada um num subagente: **Standards** (convenções documentadas, regras de camada, code smells e SOLID) e **Spec** (o PR entrega o que o ticket/spec pediu?). Não procura bugs.
 
@@ -32,8 +33,8 @@ Este repositório é a base do loop de engenharia (planejar → implementar → 
 | Etapa | Situação |
 |---|---|
 | 1. Contrato JSON dos achados (`contrato-achados.md`) e saída estruturada nas duas especialistas | feito (1.1.0) |
-| 2. `review-pr`: orquestração, SHA fixo, consolidação e publicação única | feito (1.1.0), validar com PRs reais |
-| 3. `resolve-pr-feedback`: correção dos achados com limite de ciclos e revisão independente | a fazer |
+| 2. `review-pr`: orquestração, SHA fixo, consolidação e publicação única | feito (1.1.1), validado com plugin instalado no seqop |
+| 3. `resolve-pr-feedback`: correção dos achados com limite de ciclos, revisão independente e reconciliação | feito (1.2.0), validado no seqop (1 ciclo completo no PR edgebr/petr-op-seqop-frontend#301) |
 | 4. CI como autoridade independente (GitHub Actions + proteção de branch) | a fazer |
 | 5. Disparo por eventos do GitHub | a fazer |
 | 6. Observabilidade e aprendizado controlado das regras | a fazer |
@@ -52,7 +53,7 @@ No Claude Code:
 /plugin install crono-review@claude-review-skills
 ```
 
-Instale só o plugin do projeto em que você trabalha. Para receber atualizações: `/plugin marketplace update claude-review-skills`.
+Instale só o plugin do projeto em que você trabalha. Para receber atualizações: `/plugin marketplace update claude-review-skills` e depois `claude plugin update <plugin>@claude-review-skills --scope <escopo da instalação>` (o `update` procura em `user` por padrão; se você instalou com `--scope local`, informe `--scope local`). As skills novas valem a partir da próxima sessão.
 
 ## Uso
 
@@ -83,6 +84,7 @@ plugins/
 │   ├── .claude-plugin/plugin.json
 │   └── skills/
 │       ├── review-pr/             (SKILL.md — orquestrador)
+│       ├── resolve-pr-feedback/   (SKILL.md — correção em ciclos + reconciliação)
 │       ├── reviewer/              (SKILL.md, references/publicacao-pr.md, references/contrato-achados.md)
 │       └── standards-spec-review/ (SKILL.md, references/arquitetura.md, references/smells.md)
 └── crono-review/                  (mesma estrutura, regras do Crono)
