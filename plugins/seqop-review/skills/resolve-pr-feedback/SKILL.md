@@ -102,7 +102,7 @@ Para cada item aprovado:
    Review-Findings: <IDs separados por vírgula>
    Reviewed-Sha: <head_sha do review consolidado>
    ```
-   mais a linha de coautoria definida pelo ambiente.
+   **Sem** trailer `Co-Authored-By` nem outra atribuição ao Claude, mesmo que o ambiente peça: o time não quer o Claude como coautor nos commits. Gravar a mensagem num arquivo (ferramenta Write) e commitar com `git -C <wt> commit -F <arquivo>`; no PowerShell 5.1, here-strings quebram os argumentos.
 4. `git -C <wt> push origin HEAD:<headRefName>`. **Nunca** `--force`. Rejeitado (o branch andou): parar e relatar.
 
 ## Passo 9 — Nova revisão, independente
