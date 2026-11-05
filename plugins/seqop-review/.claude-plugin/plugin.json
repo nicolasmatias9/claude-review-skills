@@ -1,6 +1,6 @@
 {
     "name": "seqop-review",
-    "version": "1.2.1",
+    "version": "1.3.0",
     "description": "Revisão de PR do SEQOP (petr-op-seqop-backend, petr-op-seqop-frontend, petr-op-core): caça de bugs e revisão de Standards/Spec, com o resultado publicado no PR.",
     "author": {
         "name": "Nicolas Matias",

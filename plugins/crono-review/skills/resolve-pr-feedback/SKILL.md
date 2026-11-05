@@ -1,6 +1,6 @@
 ---
 name: resolve-pr-feedback
-description: Corrige os itens obrigatórios do review consolidado (review-pr) de um PR do Crono (petr-op-crono-backend, petr-op-crono-frontend) em ciclos controlados — valida que os achados ainda valem para o head do PR, monta um plano, pede aprovação, corrige numa worktree, roda testes, mostra o diff, commita e faz push após aprovação, pede nova revisão independente e reconcilia os achados (resolvido, aberto, invalidado). No máximo 3 ciclos. Use quando o usuário pedir "/crono-review:resolve-pr-feedback", "corrige os achados do PR 123", "resolve o feedback do review" ou "aplica as correções do review-pr".
+description: Corrige os itens obrigatórios do review consolidado (review-pr) de um PR do Crono (petr-op-crono-backend, petr-op-crono-frontend) em ciclos controlados — valida que os achados ainda valem para o head do PR, monta um plano, pede aprovação, corrige numa worktree, roda testes, mostra o diff, commita e faz push após aprovação, pede nova revisão independente e reconcilia os achados (resolvido, aberto, invalidado). No máximo 3 ciclos. Em PR ou commit de outra pessoa, não edita arquivos, só comenta no PR o que encontrou. Use quando o usuário pedir "/crono-review:resolve-pr-feedback", "corrige os achados do PR 123", "resolve o feedback do review" ou "aplica as correções do review-pr".
 ---
 
 # resolve-pr-feedback — correção controlada dos achados de um PR
@@ -27,7 +27,7 @@ gh api user --jq .login
 ```
 
 - PR fechado ou mergeado: parar.
-- **Push só em PR próprio e do mesmo repositório**: se `author.login` for diferente do usuário do `gh`, ou `isCrossRepository` for `true`, forçar `--plan-only` e avisar ("PR de outro autor: gero o plano e o diff, sem push").
+- **Só corrige PR próprio, do mesmo repositório e só com commits do usuário.** Se `author.login` for diferente do usuário do `gh`, se `isCrossRepository` for `true` ou se algum commit do PR tiver autor diferente do usuário (`commits[].authors[].login`; autor sem `login` conta como outra pessoa), seguir o **modo comentário** (seção abaixo) e avisar: "PR ou commit de outra pessoa: só comento no PR o que encontrei, sem editar arquivos".
 - Ciclos já feitos = commits do PR cuja mensagem tem o trailer `Resolve-PR-Feedback: ciclo <k>`. Se já chegou a `--max-cycles`, parar: o PR precisa de decisão humana.
 
 ## Passo 2 — Carregar o review consolidado
@@ -162,9 +162,36 @@ Publicar um comentário no PR (`gh pr comment`, sem pedir confirmação: é o re
 
 Ao encerrar: remover a junction (`cmd /c rmdir "<wt>\node_modules"`) **antes** da worktree (`git worktree remove --force <wt>`) e apagar o branch local `resolve/pr-<N>`. Na ordem inversa, o `--force` pode apagar o `node_modules` do clone original. Se o clone do usuário estiver no branch do PR, avisar que ele ficou atrás do remoto (`git pull` para trazer os commits dos ciclos); não atualizar o clone por conta própria.
 
+## Modo comentário — PR ou commit de outra pessoa
+
+Em PR de outro autor, ou com commits de outra pessoa, a skill **não edita arquivos**: nada de worktree de correção, edição no clone do usuário, commit ou push. Só lê o código e comenta no PR o que encontrou; quem corrige é o autor. Vale com qualquer flag e mesmo que a correção pareça trivial.
+
+1. Passos 2 e 3 normalmente, lendo o código só com `git -C <pasta> fetch origin <headRefName>` e `git -C <pasta> show <head_sha>:<arquivo>`. `--include-suggestions` vale para a seleção.
+2. Não repetir: se já existe review com o marcador `<!-- resolve-pr-feedback:v1 mode=comment head_sha=<head_sha> -->`, informar o link e parar.
+   ```bash
+   gh api repos/$R/pulls/$N/reviews --paginate --jq '[.[] | select(.body | contains("<!-- resolve-pr-feedback:v1 mode=comment head_sha=<head_sha>"))] | last | .html_url'
+   ```
+3. Publicar **um** review `event: COMMENT` com `commit_id` igual ao `head_sha`, via `gh api repos/$R/pulls/$N/reviews --method POST --input <arquivo.json>` (JSON gravado com a ferramenta Write, sem BOM, como em [../reviewer/references/publicacao-pr.md](../reviewer/references/publicacao-pr.md)). Sem pedir confirmação: é regra do time publicar a revisão no PR.
+   - **Comentário inline** (`path`, `line`, `side: RIGHT`) para cada item `a_corrigir`: o problema, a evidência de que ainda vale no head, a correção sugerida em texto e o teste que a cobriria. Bloco ` ```suggestion ` só para troca restrita às linhas comentadas, avisando que não foi testada. Linha fora do diff (a API rejeita) vai para o corpo, com `arquivo:linha`.
+   - **Corpo**: título "Triagem dos achados do review-pr", link do review consolidado, tabela `ID → triagem (a corrigir, invalidado, precisa de decisão humana) → evidência`, perguntas para o autor, a frase "Nenhum arquivo foi alterado: as correções ficam com o autor do PR.", o marcador e um `<details>` com o JSON:
+     ```json
+     {
+         "schema_version": "1.0",
+         "kind": "resolve-pr-feedback",
+         "mode": "comment",
+         "pull_request": 0,
+         "reviewed_sha": "<head_sha>",
+         "items": [{ "id": "CON-001", "fingerprint": "", "triage": "a_corrigir|invalidated|needs_human", "file": "", "line": 0, "evidence": "", "suggested_fix": "" }]
+     }
+     ```
+   - Só afirmar o que foi verificado no código do `head_sha`.
+   - O status de merge continua o do review consolidado: o modo comentário não muda o status.
+4. Mostrar ao usuário a tabela da triagem e o link do review publicado, e encerrar. Os Passos 4 a 11 não se aplicam.
+
 ## Regras
 
 - Nunca fazer merge, aprovar PR, `push --force` ou commitar no clone do usuário.
+- Em PR de outro autor ou com commits de outra pessoa, nunca editar arquivos, criar worktree de correção, commitar ou fazer push: só comentar no PR (modo comentário).
 - Nunca fazer push sem aprovação explícita do diff naquele ciclo.
 - Nunca corrigir achados de um `head_sha` diferente do head atual do PR.
 - Nunca alterar regras de revisão para contornar achados.
